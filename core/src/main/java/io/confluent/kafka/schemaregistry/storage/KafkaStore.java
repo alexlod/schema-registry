@@ -71,6 +71,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final int initTimeout;
   private final int timeout;
   private final Seq<Broker> brokerSeq;
+  private final String bootstrapBrokers;
   private final ZkUtils zkUtils;
   private KafkaProducer<byte[],byte[]> producer;
   private KafkaStoreReaderThread<K, V> kafkaTopicReader;
@@ -106,12 +107,19 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.zkUtils = ZkUtils.apply(
         kafkaClusterZkUrl, zkSessionTimeoutMs, zkSessionTimeoutMs,
         JaasUtils.isZkSecurityEnabled());
-    this.kafkaTopicReader =
-        new KafkaStoreReaderThread<>(zkUtils, kafkaClusterZkUrl, topic, groupId,
-                                         Integer.MIN_VALUE, this.storeUpdateHandler,
-                                         serializer, this.localStore, this.noopKey);
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
+    List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < brokers.size(); i++) {
+      for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
+        if (sb.length() > 0) {
+          sb.append(",");
+        }
+        sb.append(ep.connectionString());
+      }
+    }
+    this.bootstrapBrokers = sb.toString();
   }
 
   @Override
@@ -124,18 +132,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // create the schema topic if needed
     createSchemaTopic();
 
-    // set the producer properties
-    List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
-    String bootstrapBrokers = "";
-    for (int i = 0; i < brokers.size(); i++) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
-        if (bootstrapBrokers.length() > 0) {
-          bootstrapBrokers += ",";
-        }
-        bootstrapBrokers += ep.connectionString();
-      }
-    }
-    // initialize a Kafka producer client
+    // set the producer properties and initialize a Kafka producer client
     Properties props = new Properties();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     props.put(ProducerConfig.ACKS_CONFIG, "-1");
@@ -146,8 +143,13 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
     producer = new KafkaProducer<byte[],byte[]>(props);
 
-    // start the background thread that subscribes to the Kafka topic and applies updates
-    kafkaTopicReader.start();
+    // start the background thread that subscribes to the Kafka topic and applies updates.
+    // the thread must be created after the schema topic has been created.
+    this.kafkaTopicReader =
+            new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
+                    Integer.MIN_VALUE, this.storeUpdateHandler,
+                    serializer, this.localStore, this.noopKey);
+    this.kafkaTopicReader.start();
 
     try {
       waitUntilKafkaReaderReachesLastOffset(initTimeout);
@@ -362,6 +364,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
       Future<RecordMetadata> ack = producer.send(producerRecord);
       RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
       this.lastWrittenOffset = metadata.offset();
+      log.trace("Noop record's offset is " + this.lastWrittenOffset);
       return this.lastWrittenOffset;
     } catch (Exception e) {
       throw new StoreException("Failed to write Noop record to kafka store.", e);

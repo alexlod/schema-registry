@@ -15,13 +15,18 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -31,22 +36,14 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.common.MessageSizeTooLargeException;
-import kafka.consumer.ConsumerConfig;
-import kafka.consumer.ConsumerIterator;
-import kafka.consumer.ConsumerTimeoutException;
-import kafka.consumer.KafkaStream;
-import kafka.javaapi.consumer.ConsumerConnector;
-import kafka.javaapi.consumer.ZookeeperConsumerConnector;
-import kafka.message.MessageAndMetadata;
 import kafka.utils.ShutdownableThread;
-import kafka.utils.ZkUtils;
-import scala.Option;
 
 public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreReaderThread.class);
 
   private final String topic;
+  private final TopicPartition topicPartition;
   private final String groupId;
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
@@ -54,16 +51,14 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final long commitInterval;
   private final ReentrantLock offsetUpdateLock;
   private final Condition offsetReachedThreshold;
-  private ConsumerIterator<byte[], byte[]> consumerIterator;
-  private ConsumerConnector consumer;
+  private Consumer<byte[], byte[]> consumer;
   private long offsetInSchemasTopic = -1L;
   private long lastCommitTime = 0L;
   // Noop key is only used to help reliably determine last offset; reader thread ignores 
   // messages with this key
   private final K noopKey;
 
-  public KafkaStoreReaderThread(ZkUtils zkUtils,
-                                String kafkaClusterZkUrl,
+  public KafkaStoreReaderThread(String bootstrapBrokers,
                                 String topic,
                                 String groupId,
                                 int commitInterval,
@@ -82,54 +77,53 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.commitInterval = commitInterval;
     this.noopKey = noopKey;
 
-    offsetInSchemasTopic = offsetOfLastConsumedMessage(zkUtils, groupId, topic);
-    log.info("Initialized the consumer offset to " + offsetInSchemasTopic);
     Properties consumerProps = new Properties();
     consumerProps.put("group.id", this.groupId);
     consumerProps.put("client.id", "KafkaStore-reader-" + this.topic);
-    consumerProps.put("zookeeper.connect", kafkaClusterZkUrl);
-    consumerProps.put("auto.offset.reset", "smallest");
+
+    consumerProps.put("bootstrap.servers", bootstrapBrokers);
+    consumerProps.put("auto.offset.reset", "earliest");
     consumerProps.put("auto.commit.enable", "false");
-    consumer = new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps));
-    Map<String, Integer> kafkaStreamConfig = new HashMap<String, Integer>();
-    kafkaStreamConfig.put(topic, 1);
-    Map<String, List<KafkaStream<byte[], byte[]>>> streams =
-        consumer.createMessageStreams(kafkaStreamConfig);
-    List<KafkaStream<byte[], byte[]>> streamsForTheLogTopic = streams.get(topic);
-    // there should be only one kafka partition and hence only one stream
-    if (streamsForTheLogTopic != null && streamsForTheLogTopic.size() != 1) {
+    consumerProps.put("key.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    consumerProps.put("value.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    this.consumer = new KafkaConsumer<>(consumerProps);
+    this.topicPartition = new TopicPartition(topic, 0); // only one partition.
+    this.consumer.assign(Arrays.asList(this.topicPartition));
+    this.consumer.poll(1); // poll to force communication with the broker before checking if the assignment exists.
+    this.consumer.seekToBeginning(this.topicPartition);
+    if (this.consumer.assignment().size() != 1) {
       throw new IllegalArgumentException("Unable to subscribe to the Kafka topic " + topic +
                                          " backing this data store. Topic may not exist.");
     }
-    KafkaStream<byte[], byte[]> stream = streamsForTheLogTopic.get(0);
-    consumerIterator = stream.iterator();
+
+    offsetInSchemasTopic = offsetOfLastConsumedMessage();
+    log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
+
     log.debug("Kafka store reader thread started with consumer properties " +
               consumerProps.toString());
   }
 
   /**
-   * Fetch the offset of the last consumed message from ZK.
+   * Fetch the offset of the last consumed message.
    */
-  private long offsetOfLastConsumedMessage(ZkUtils zkUtils, String group, String topic) {
-    Option<String> committedOffsetStringOpt = zkUtils.readDataMaybeNull(
-        String.format("/consumers/%s/offsets/%s/0", group, topic))._1();
-    if (committedOffsetStringOpt.isEmpty()) {
+  private long offsetOfLastConsumedMessage() {
+    OffsetAndMetadata meta = this.consumer.committed(this.topicPartition);
+    if (meta == null) {
       return -1L;
     } else {
       // the offset of the last consumed message is always one less than the last committed offset
-      return Long.parseLong(committedOffsetStringOpt.get()) - 1;
+      return meta.offset() - 1;
     }
   }
 
   @Override
   public void doWork() {
     try {
-      if (consumerIterator.hasNext()) {
-        MessageAndMetadata<byte[], byte[]> messageAndMetadata = consumerIterator.next();
-        byte[] messageBytes = messageAndMetadata.message();
+      ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
+      for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
         try {
-          messageKey = this.serializer.deserializeKey(messageAndMetadata.key());
+          messageKey = this.serializer.deserializeKey(record.key());
         } catch (SerializationException e) {
           log.error("Failed to deserialize the schema or config key", e);
         }
@@ -138,7 +132,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           // If it's a noop, update local offset counter and do nothing else
           try {
             offsetUpdateLock.lock();
-            offsetInSchemasTopic = messageAndMetadata.offset();
+            offsetInSchemasTopic = record.offset();
             offsetReachedThreshold.signalAll();
           } finally {
             offsetUpdateLock.unlock();
@@ -147,7 +141,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
           V message = null;
           try {
             message =
-                messageBytes == null ? null : serializer.deserializeValue(messageKey, messageBytes);
+                record.value() == null ? null : serializer.deserializeValue(messageKey, record.value());
           } catch (SerializationException e) {
             log.error("Failed to deserialize a schema or config update", e);
           }
@@ -162,7 +156,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             this.storeUpdateHandler.handleUpdate(messageKey, message);
             try {
               offsetUpdateLock.lock();
-              offsetInSchemasTopic = messageAndMetadata.offset();
+              offsetInSchemasTopic = record.offset();
               offsetReachedThreshold.signalAll();
             } finally {
               offsetUpdateLock.unlock();
@@ -171,11 +165,14 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             log.error("Failed to add record from the Kafka topic" + topic + " the local store");
           }
         }
+
+        if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
+          log.debug("Committing offsets");
+          consumer.commitSync();
+        }
       }
-    } catch (ConsumerTimeoutException cte) {
-      // Expect ConsumerTimeout == -1, so this *should* never happen
-      throw new IllegalStateException(
-          "KafkaStoreReaderThread's ConsumerIterator timed out despite expected infinite timeout.");
+    } catch (WakeupException we) {
+      this.consumer.close();
     } catch (MessageSizeTooLargeException mstle) {
       throw new IllegalStateException(
           "ConsumerIterator threw MessageSizeTooLargeException. A schema has been written that "
@@ -184,18 +181,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       log.error("KafkaStoreReader thread has died for an unknown reason.");
       throw new RuntimeException(e);
     }
-    
-    if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
-      log.debug("Committing offsets");
-      consumer.commitOffsets(true);
-    }
   }
 
   @Override
   public void shutdown() {
     log.debug("Starting shutdown of KafkaStoreReaderThread.");
     if (consumer != null) {
-      consumer.shutdown();
+      consumer.wakeup();
     }
     if (localStore != null) {
       localStore.close();
@@ -208,7 +200,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     if (offset < 0) {
       throw new StoreException("KafkaStoreReaderThread can't wait for a negative offset.");
     }
-    
+
+    log.trace("Waiting for offset to be " + offset + ". Currently " + offsetInSchemasTopic);
+
     try {
       offsetUpdateLock.lock();
       long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
