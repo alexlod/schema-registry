@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import kafka.common.MessageSizeTooLargeException;
 import kafka.utils.ShutdownableThread;
 
 public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
@@ -87,14 +87,19 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     consumerProps.put("key.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put("value.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     this.consumer = new KafkaConsumer<>(consumerProps);
-    this.topicPartition = new TopicPartition(topic, 0); // only one partition.
-    this.consumer.assign(Arrays.asList(this.topicPartition));
-    this.consumer.poll(1); // poll to force communication with the broker before checking if the assignment exists.
-    this.consumer.seekToBeginning(this.topicPartition);
-    if (this.consumer.assignment().size() != 1) {
+
+    int partitionCount = this.consumer.partitionsFor(this.topic).size();
+    if (partitionCount < 1) {
       throw new IllegalArgumentException("Unable to subscribe to the Kafka topic " + topic +
                                          " backing this data store. Topic may not exist.");
+    } else if (partitionCount > 1) {
+      throw new IllegalStateException("Unexpected number of partitions in the " + topic +
+                                      " topic. Expected 1 and instead got " + partitionCount);
     }
+
+    this.topicPartition = new TopicPartition(topic, 0);
+    this.consumer.assign(Arrays.asList(this.topicPartition));
+    this.consumer.seekToBeginning(this.topicPartition);
 
     offsetInSchemasTopic = offsetOfLastConsumedMessage();
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
@@ -168,15 +173,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
         if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
           log.debug("Committing offsets");
+          lastCommitTime = System.currentTimeMillis();
           consumer.commitSync();
         }
       }
     } catch (WakeupException we) {
       this.consumer.close();
-    } catch (MessageSizeTooLargeException mstle) {
+    } catch (RecordTooLargeException rtle) {
       throw new IllegalStateException(
-          "ConsumerIterator threw MessageSizeTooLargeException. A schema has been written that "
-          + "exceeds the default maximum fetch size.", mstle);
+          "Consumer threw RecordTooLargeException. A schema has been written that "
+          + "exceeds the default maximum fetch size.", rtle);
     } catch (RuntimeException e) {
       log.error("KafkaStoreReader thread has died for an unknown reason.");
       throw new RuntimeException(e);
