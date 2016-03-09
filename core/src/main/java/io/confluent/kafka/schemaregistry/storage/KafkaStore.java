@@ -111,8 +111,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
     StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < brokers.size(); i++) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(brokers.get(i).endPoints().values())) {
+    for (Broker broker : brokers) {
+      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
         if (sb.length() > 0) {
           sb.append(",");
         }

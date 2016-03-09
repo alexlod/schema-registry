@@ -207,7 +207,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       throw new StoreException("KafkaStoreReaderThread can't wait for a negative offset.");
     }
 
-    log.trace("Waiting for offset to be " + offset + ". Currently " + offsetInSchemasTopic);
+    log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetInSchemasTopic);
 
     try {
       offsetUpdateLock.lock();
