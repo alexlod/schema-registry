@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,9 +100,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.serializer = serializer;
     this.localStore = localStore;
     this.noopKey = noopKey;
-    
-    // TODO: Do not use the commit interval until the decision on the embedded store is done
-    int commitInterval = config.getInt(SchemaRegistryConfig.KAFKASTORE_COMMIT_INTERVAL_MS_CONFIG);
+
     int zkSessionTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_ZK_SESSION_TIMEOUT_MS_CONFIG);
     this.zkUtils = ZkUtils.apply(
@@ -109,17 +108,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
         JaasUtils.isZkSecurityEnabled());
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
-    List<Broker> brokers = JavaConversions.seqAsJavaList(brokerSeq);
-    StringBuilder sb = new StringBuilder();
-    for (Broker broker : brokers) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
-        if (sb.length() > 0) {
-          sb.append(",");
-        }
-        sb.append(ep.connectionString());
-      }
-    }
-    this.bootstrapBrokers = sb.toString();
+    this.bootstrapBrokers = getBrokerEndpointsFromZk(this.brokerSeq);
   }
 
   @Override
@@ -147,8 +136,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // the thread must be created after the schema topic has been created.
     this.kafkaTopicReader =
             new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
-                    Integer.MIN_VALUE, this.storeUpdateHandler,
-                    serializer, this.localStore, this.noopKey);
+                    this.storeUpdateHandler, serializer, this.localStore,
+                    this.noopKey);
     this.kafkaTopicReader.start();
 
     try {
@@ -188,6 +177,33 @@ public class KafkaStore<K, V> implements Store<K, V> {
     } catch (TopicExistsException e) {
       // This is ok.
     }
+  }
+
+  private String getBrokerEndpointsFromZk(Seq<Broker> brokers) {
+    List<Broker> brokerList = JavaConversions.seqAsJavaList(brokers);
+    StringBuilder sb = new StringBuilder();
+
+    for (Broker broker : brokerList) {
+      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
+        String connectionString = ep.connectionString();
+
+        if (connectionString.startsWith("PLAINTEXT://")) {
+          if (sb.length() > 0) {
+            sb.append(",");
+          }
+          sb.append(connectionString);
+        } else {
+          log.warn("Ignoring non-plaintext Kafka endpoint: " + connectionString);
+        }
+      }
+    }
+
+    if (sb.length() == 0) {
+      throw new ConfigException("Only plaintext Kafka endpoints are supported and " +
+              "none are configured.");
+    }
+
+    return sb.toString();
   }
 
   private void verifySchemaTopic() {

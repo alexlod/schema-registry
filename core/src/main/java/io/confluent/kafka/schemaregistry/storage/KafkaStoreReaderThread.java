@@ -17,9 +17,9 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -48,12 +48,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final StoreUpdateHandler<K, V> storeUpdateHandler;
   private final Serializer<K, V> serializer;
   private final Store<K, V> localStore;
-  private final long commitInterval;
   private final ReentrantLock offsetUpdateLock;
   private final Condition offsetReachedThreshold;
   private Consumer<byte[], byte[]> consumer;
   private long offsetInSchemasTopic = -1L;
-  private long lastCommitTime = 0L;
   // Noop key is only used to help reliably determine last offset; reader thread ignores 
   // messages with this key
   private final K noopKey;
@@ -61,7 +59,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   public KafkaStoreReaderThread(String bootstrapBrokers,
                                 String topic,
                                 String groupId,
-                                int commitInterval,
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
@@ -74,18 +71,19 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
     this.localStore = localStore;
-    this.commitInterval = commitInterval;
     this.noopKey = noopKey;
 
     Properties consumerProps = new Properties();
-    consumerProps.put("group.id", this.groupId);
-    consumerProps.put("client.id", "KafkaStore-reader-" + this.topic);
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
+    consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
 
-    consumerProps.put("bootstrap.servers", bootstrapBrokers);
-    consumerProps.put("auto.offset.reset", "earliest");
-    consumerProps.put("auto.commit.enable", "false");
-    consumerProps.put("key.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-    consumerProps.put("value.deserializer", org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     this.consumer = new KafkaConsumer<>(consumerProps);
 
     int partitionCount = this.consumer.partitionsFor(this.topic).size();
@@ -101,29 +99,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     this.consumer.assign(Arrays.asList(this.topicPartition));
     this.consumer.seekToBeginning(this.topicPartition);
 
-    offsetInSchemasTopic = offsetOfLastConsumedMessage();
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
 
     log.debug("Kafka store reader thread started with consumer properties " +
               consumerProps.toString());
   }
 
-  /**
-   * Fetch the offset of the last consumed message.
-   */
-  private long offsetOfLastConsumedMessage() {
-    OffsetAndMetadata meta = this.consumer.committed(this.topicPartition);
-    if (meta == null) {
-      return -1L;
-    } else {
-      // the offset of the last consumed message is always one less than the last committed offset
-      return meta.offset() - 1;
-    }
-  }
-
   @Override
   public void doWork() {
     try {
+      // don't need to commit offsets because the log is always read from the beginning on startup
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
@@ -170,15 +155,9 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             log.error("Failed to add record from the Kafka topic" + topic + " the local store");
           }
         }
-
-        if (commitInterval > 0 && System.currentTimeMillis() - lastCommitTime > commitInterval) {
-          log.debug("Committing offsets");
-          lastCommitTime = System.currentTimeMillis();
-          consumer.commitSync();
-        }
       }
     } catch (WakeupException we) {
-      this.consumer.close();
+      consumer.close();
     } catch (RecordTooLargeException rtle) {
       throw new IllegalStateException(
           "Consumer threw RecordTooLargeException. A schema has been written that "
@@ -192,13 +171,15 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   @Override
   public void shutdown() {
     log.debug("Starting shutdown of KafkaStoreReaderThread.");
+
+    super.initiateShutdown();
     if (consumer != null) {
       consumer.wakeup();
     }
     if (localStore != null) {
       localStore.close();
     }
-    super.shutdown();
+    super.awaitShutdown();
     log.info("KafkaStoreReaderThread shutdown complete.");
   }
 
