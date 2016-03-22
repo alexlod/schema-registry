@@ -125,7 +125,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         try {
           messageKey = this.serializer.deserializeKey(record.key());
         } catch (SerializationException e) {
-          log.error("Failed to deserialize the schema or config key", e);
+          throw new RuntimeException("Failed to deserialize the schema or config key", e);
         }
         
         if (messageKey.equals(noopKey)) {
@@ -143,7 +143,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             message =
                 record.value() == null ? null : serializer.deserializeValue(messageKey, record.value());
           } catch (SerializationException e) {
-            log.error("Failed to deserialize a schema or config update", e);
+            throw new RuntimeException("Failed to deserialize a schema or config update", e);
           }
           try {
             log.trace("Applying update (" + messageKey + "," + message + ") to the local " +
@@ -162,7 +162,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               offsetUpdateLock.unlock();
             }
           } catch (StoreException se) {
-            log.error("Failed to add record from the Kafka topic" + topic + " the local store");
+            throw new RuntimeException("Failed to add record from the Kafka topic" + topic + " the local store");
           }
         }
       }
