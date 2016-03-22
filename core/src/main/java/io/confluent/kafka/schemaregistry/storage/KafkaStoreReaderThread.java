@@ -97,7 +97,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
     this.topicPartition = new TopicPartition(topic, 0);
     this.consumer.assign(Arrays.asList(this.topicPartition));
-    this.consumer.seekToBeginning(this.topicPartition);
+    this.consumer.seekToBeginning(Arrays.asList(this.topicPartition));
 
     log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
 

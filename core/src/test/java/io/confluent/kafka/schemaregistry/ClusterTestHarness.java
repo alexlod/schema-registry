@@ -34,12 +34,9 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.SystemTime$;
 import kafka.utils.TestUtils;
-import kafka.utils.TestUtils$;
-import kafka.utils.ZKStringSerializer$;
 import kafka.utils.ZkUtils;
 import kafka.zk.EmbeddedZookeeper;
 import scala.Option;
-import scala.Option$;
 import scala.collection.JavaConversions;
 
 /**
@@ -132,7 +129,7 @@ public abstract class ClusterTestHarness {
       Properties props = TestUtils.createBrokerConfig(
           i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
           noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-          TestUtils.RandomPort());
+          TestUtils.RandomPort(), Option.apply("test-rack"));
       props.setProperty("auto.create.topics.enable", "true");
       props.setProperty("num.partitions", "1");
       // We *must* override this to use the port we allocated (Kafka currently allocates one port
