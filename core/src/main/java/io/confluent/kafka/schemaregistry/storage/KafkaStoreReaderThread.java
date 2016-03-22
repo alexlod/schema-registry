@@ -20,12 +20,14 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Properties;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +40,15 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import kafka.utils.ShutdownableThread;
 
+/**
+ * Thread that reads schema registry state from the Kafka compacted topic and modifies
+ * the local store to be consistent.
+ *
+ * On startup, this thread will always read from the beginning of the topic. We assume
+ * the topic will always be small, hence the startup time to read the topic won't take
+ * too long. Because the topic is always read from the beginning, the consumer never
+ * commits offsets.
+ */
 public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreReaderThread.class);
@@ -86,13 +97,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     this.consumer = new KafkaConsumer<>(consumerProps);
 
-    int partitionCount = this.consumer.partitionsFor(this.topic).size();
-    if (partitionCount < 1) {
+    List<PartitionInfo> partitions = this.consumer.partitionsFor(this.topic);
+    if (partitions == null || partitions.size() < 1) {
       throw new IllegalArgumentException("Unable to subscribe to the Kafka topic " + topic +
                                          " backing this data store. Topic may not exist.");
-    } else if (partitionCount > 1) {
+    } else if (partitions.size() > 1) {
       throw new IllegalStateException("Unexpected number of partitions in the " + topic +
-                                      " topic. Expected 1 and instead got " + partitionCount);
+                                      " topic. Expected 1 and instead got " + partitions.size());
     }
 
     this.topicPartition = new TopicPartition(topic, 0);
@@ -108,7 +119,6 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   @Override
   public void doWork() {
     try {
-      // don't need to commit offsets because the log is always read from the beginning on startup
       ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
       for (ConsumerRecord<byte[], byte[]> record : records) {
         K messageKey = null;
