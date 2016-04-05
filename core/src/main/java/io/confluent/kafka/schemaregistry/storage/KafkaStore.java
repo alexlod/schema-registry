@@ -57,10 +57,6 @@ import scala.collection.Seq;
 public class KafkaStore<K, V> implements Store<K, V> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStore.class);
-  private static final String CLIENT_ID = "schema-registry";
-  private static final int SOCKET_BUFFER_SIZE = 4096;
-  private static final long LATEST_OFFSET = -1;
-  private static final int CONSUMER_ID = -1;
 
   private final String kafkaClusterZkUrl;
   private final String topic;
@@ -205,7 +201,11 @@ public class KafkaStore<K, V> implements Store<K, V> {
               "none are configured.");
     }
 
-    return sb.toString();
+    String brokerEndpoints = sb.toString();
+
+    log.info("Initializing KafkaStore with broker endpoints: " + brokerEndpoints);
+
+    return brokerEndpoints;
   }
 
   private void verifySchemaTopic() {
