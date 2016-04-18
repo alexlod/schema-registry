@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import kafka.admin.RackAwareMode;
 import kafka.cluster.EndPoint;
 import kafka.server.ConfigType;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -77,6 +78,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
+  private final String kafkastoreSecurityProtocol;
+  private final String kafkastoreSSLTruststoreLocation;
+  private final String kafkastoreSSLTruststorePassword;
+  private final String kafkastoreSSLKeystoreLocation;
+  private final String kafkastoreSSLKeystorePassword;
+  private final String kafkastoreSSLKeyPassword;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -107,6 +114,19 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
             JavaConversions.seqAsJavaList(this.brokerSeq));
+
+    this.kafkastoreSecurityProtocol =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG);
+    this.kafkastoreSSLTruststoreLocation =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG);
+    this.kafkastoreSSLTruststorePassword =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG);
+    this.kafkastoreSSLKeystoreLocation =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG);
+    this.kafkastoreSSLKeystorePassword =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG);
+    this.kafkastoreSSLKeyPassword =
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG);
   }
 
   @Override
@@ -128,6 +148,16 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+    if (this.kafkastoreSecurityProtocol.equals(
+        SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, this.kafkastoreSecurityProtocol);
+      props.put("ssl.truststore.location", this.kafkastoreSSLTruststoreLocation);
+      props.put("ssl.truststore.password", this.kafkastoreSSLTruststorePassword);
+      props.put("ssl.keystore.location", this.kafkastoreSSLKeystoreLocation);
+      props.put("ssl.keystore.password", this.kafkastoreSSLKeystorePassword);
+      props.put("ssl.key.password", this.kafkastoreSSLKeyPassword);
+    }
+
     producer = new KafkaProducer<byte[],byte[]>(props);
 
     // start the background thread that subscribes to the Kafka topic and applies updates.
@@ -135,7 +165,10 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
             new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                     this.storeUpdateHandler, serializer, this.localStore,
-                    this.noopKey);
+                    this.noopKey, this.kafkastoreSecurityProtocol,
+                    this.kafkastoreSSLTruststoreLocation, this.kafkastoreSSLTruststorePassword,
+                    this.kafkastoreSSLKeystoreLocation, this.kafkastoreSSLKeystorePassword,
+                    this.kafkastoreSSLKeyPassword);
     this.kafkaTopicReader.start();
 
     try {
@@ -185,19 +218,20 @@ public class KafkaStore<K, V> implements Store<K, V> {
       for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
         String connectionString = ep.connectionString();
 
-        if (connectionString.startsWith("PLAINTEXT://")) {
+        if (connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL + "://")
+            || connectionString.startsWith(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT + "://")) {
           if (sb.length() > 0) {
             sb.append(",");
           }
           sb.append(connectionString);
         } else {
-          log.warn("Ignoring non-plaintext Kafka endpoint: " + connectionString);
+          log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + connectionString);
         }
       }
     }
 
     if (sb.length() == 0) {
-      throw new ConfigException("Only plaintext Kafka endpoints are supported and " +
+      throw new ConfigException("Only plaintext and SSL Kafka endpoints are supported and " +
               "none are configured.");
     }
 

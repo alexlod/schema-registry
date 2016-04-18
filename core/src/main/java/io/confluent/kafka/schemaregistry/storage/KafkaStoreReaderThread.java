@@ -15,6 +15,8 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -73,7 +75,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
-                                K noopKey) {
+                                K noopKey,
+                                String kafkastoreSecurityProtocol,
+                                String kafkastoreSSLTruststoreLocation,
+                                String kafkastoreSSLTruststorePassword,
+                                String kafkastoreSSLKeystoreLocation,
+                                String kafkastoreSSLKeystorePassword,
+                                String kafkastoreSSLKeyPassword) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -95,6 +103,15 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    if (kafkastoreSecurityProtocol.equals(
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, kafkastoreSecurityProtocol);
+      consumerProps.put("ssl.truststore.location", kafkastoreSSLTruststoreLocation);
+      consumerProps.put("ssl.truststore.password", kafkastoreSSLTruststorePassword);
+      consumerProps.put("ssl.keystore.location", kafkastoreSSLKeystoreLocation);
+      consumerProps.put("ssl.keystore.password", kafkastoreSSLKeystorePassword);
+      consumerProps.put("ssl.key.password", kafkastoreSSLKeyPassword);
+    }
     this.consumer = new KafkaConsumer<>(consumerProps);
 
     List<PartitionInfo> partitions = this.consumer.partitionsFor(this.topic);

@@ -51,6 +51,13 @@ Configuration Options
   * Default: "localhost"
   * Importance: high
 
+``kafkastore.security.protocol``
+  The security protocol to use when connecting with Kafka, the underlying persistent storage. Values can be `PLAINTEXT` or `SSL`.
+
+  * Type: string
+  * Default: "PLAINTEXT"
+  * Importance: high
+
 ``kafkastore.init.timeout.ms``
   The timeout for initialization of the Kafka store, including creation of the Kafka topic that stores schema data.
 
@@ -70,6 +77,41 @@ Configuration Options
 
   * Type: boolean
   * Default: true
+  * Importance: medium
+
+``kafkastore.ssl.truststore.location``
+  The location of the SSL trust store file used when `kafka.security.protocol` is configured to `SSL`.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.truststore.password``
+  The password to access the trust store configured with `kafka.ssl.truststore.location`.
+
+  * Type: password
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.keystore.location``
+  The location of the SSL keystore file used when `kafka.security.protocol` is configured to `SSL` and Kafka requires SSL authentication.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.keystore.password``
+  The password to access the keystore configured with `kafka.ssl.keystore.location`.
+
+  * Type: password
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.ssl.key.password``
+  The password of the key contained in the keystore configured with `kafka.ssl.keystore.location`.
+
+  * Type: password
+  * Default: ""
   * Importance: medium
 
 ``access.control.allow.origin``
