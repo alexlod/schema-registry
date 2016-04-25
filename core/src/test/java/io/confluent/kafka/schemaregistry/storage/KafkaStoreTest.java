@@ -266,7 +266,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   /**
-   * This test creates three brokers, two with PLAINTEXT endpoints and one with a SASL endpoint. This scenario
+   * This test creates brokers with different security protocols. This scenario
    * where different brokers in the same cluster support different security endpoints wouldn't exist.
    * However, this setup creates the needed test scenario for getBrokerEndpoints().
    */
@@ -276,12 +276,17 @@ public class KafkaStoreTest extends ClusterTestHarness {
     brokersList.add(new Broker(0, "localhost", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
     brokersList.add(new Broker(1, "localhost1", TestUtils.RandomPort(), SecurityProtocol.PLAINTEXT));
     brokersList.add(new Broker(2, "localhost2", TestUtils.RandomPort(), SecurityProtocol.SASL_PLAINTEXT));
+    brokersList.add(new Broker(3, "localhost3", TestUtils.RandomPort(), SecurityProtocol.SSL));
 
     String endpointsString = KafkaStore.getBrokerEndpoints(brokersList);
     String[] endpoints = endpointsString.split(",");
     assertEquals("Expected a different number of endpoints.", brokersList.size() - 1, endpoints.length);
     for (String endpoint : endpoints) {
-      assertTrue("Endpoint must be a PLAINTEXT endpoint.", endpoint.contains("PLAINTEXT://"));
+      if (endpoint.contains("localhost3")) {
+        assertTrue("Endpoint must be a SSL endpoint.", endpoint.contains("SSL://"));
+      } else {
+        assertTrue("Endpoint must be a PLAINTEXT endpoint.", endpoint.contains("PLAINTEXT://"));
+      }
     }
   }
 }
