@@ -190,3 +190,38 @@ Configuration Options
   * Type: int
   * Default: 1000
   * Importance: low
+
+``kafkastore.ssl.enabled.protocols``
+
+
+  * Type: string
+  * Default: "" (falls back on Kafka's client defaults)
+  * Importance: low
+
+``kafkastore.ssl.keystore.type``
+
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: low
+
+``kafkastore.ssl.protocol``
+
+
+  * Type: string
+  * Default: "TLS"
+  * Importance: low
+
+``kafkastore.ssl.provider``
+
+
+  * Type: string
+  * Default: ""
+  * Importance: low
+
+``kafkastore.ssl.truststore.type``
+
+
+  * Type: string
+  * Default: "JKS"
+  * Importance: low

@@ -82,7 +82,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 String kafkastoreSSLTruststorePassword,
                                 String kafkastoreSSLKeystoreLocation,
                                 String kafkastoreSSLKeystorePassword,
-                                String kafkastoreSSLKeyPassword) {
+                                String kafkastoreSSLKeyPassword,
+                                String kafkastoreSSLEnabledProtocols,
+                                String kafkastoreSSLKeystoreType,
+                                String kafkastoreSSLProtocol,
+                                String kafkastoreSSLProvider,
+                                String kafkastoreSSLTruststoreType) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -115,6 +120,12 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
               consumerProps);
       KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG, kafkastoreSSLKeyPassword,
               consumerProps);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, kafkastoreSSLEnabledProtocols,
+              consumerProps);
+      consumerProps.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, kafkastoreSSLKeystoreType);
+      consumerProps.put(SslConfigs.SSL_PROTOCOL_CONFIG, kafkastoreSSLProtocol);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG, kafkastoreSSLProvider, consumerProps);
+      consumerProps.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, kafkastoreSSLTruststoreType);
     }
     this.consumer = new KafkaConsumer<>(consumerProps);
 
