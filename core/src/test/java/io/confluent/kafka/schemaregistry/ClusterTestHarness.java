@@ -124,18 +124,7 @@ public abstract class ClusterTestHarness {
     configs = new Vector<>();
     servers = new Vector<>();
     for (int i = 0; i < numBrokers; i++) {
-      final Option<java.io.File> noFile = scala.Option.apply(null);
-      final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
-      Properties props = TestUtils.createBrokerConfig(
-          i, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-          noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
-          TestUtils.RandomPort(), Option.<String>empty());
-      props.setProperty("auto.create.topics.enable", "true");
-      props.setProperty("num.partitions", "1");
-      // We *must* override this to use the port we allocated (Kafka currently allocates one port
-      // that it always uses for ZK
-      props.setProperty("zookeeper.connect", this.zkConnect);
-      KafkaConfig config = KafkaConfig.fromProps(props);
+      KafkaConfig config = getKafkaConfig(i);
       configs.add(config);
 
       KafkaServer server = TestUtils.createServer(config, SystemTime$.MODULE$);
@@ -144,12 +133,31 @@ public abstract class ClusterTestHarness {
 
     brokerList =
         TestUtils.getBrokerListStrFromServers(JavaConversions.asScalaBuffer(servers),
-                                              SecurityProtocol.PLAINTEXT);
+                                              getSecurityProtocol());
 
     if (setupRestApp) {
       restApp = new RestApp(choosePort(), zkConnect, KAFKASTORE_TOPIC, compatibilityType);
       restApp.start();
     }
+  }
+
+  protected KafkaConfig getKafkaConfig(int brokerId) {
+    final Option<java.io.File> noFile = scala.Option.apply(null);
+    final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
+    Properties props = TestUtils.createBrokerConfig(
+            brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
+            noFile, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+            TestUtils.RandomPort(), Option.<String>empty());
+    props.setProperty("auto.create.topics.enable", "true");
+    props.setProperty("num.partitions", "1");
+    // We *must* override this to use the port we allocated (Kafka currently allocates one port
+    // that it always uses for ZK
+    props.setProperty("zookeeper.connect", this.zkConnect);
+    return KafkaConfig.fromProps(props);
+  }
+
+  protected SecurityProtocol getSecurityProtocol() {
+    return SecurityProtocol.PLAINTEXT;
   }
 
   @After

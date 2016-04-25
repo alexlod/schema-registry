@@ -32,6 +32,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   private static final int SCHEMAREGISTRY_PORT_DEFAULT = 8081;
 
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_SSL = "SSL";
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
+
   public static final String KAFKASTORE_CONNECTION_URL_CONFIG = "kafkastore.connection.url";
   /**
    * <code>kafkastore.zk.session.timeout.ms</code>
@@ -76,6 +79,18 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>avro.compatibility.level</code>
    */
   public static final String COMPATIBILITY_CONFIG = "avro.compatibility.level";
+  public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
+      "kafkastore.security.protocol";
+  public static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG =
+      "kafkastore.ssl.truststore.location";
+  public static final String KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG =
+      "kafkastore.ssl.truststore.password";
+  public static final String KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG =
+      "kafkastore.ssl.keystore.location";
+  public static final String KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG =
+      "kafkastore.ssl.keystore.password";
+  public static final String KAFKASTORE_SSL_KEY_PASSWORD_CONFIG =
+      "kafkastore.ssl.key.password";
   protected static final String KAFKASTORE_CONNECTION_URL_DOC =
       "Zookeeper url for the Kafka cluster";
   protected static final String SCHEMAREGISTRY_ZK_NAMESPACE_DOC =
@@ -112,7 +127,23 @@ public class SchemaRegistryConfig extends RestConfig {
       + "full (new schema is backward and forward compatible with latest registered schema)";
   protected static final String MASTER_ELIGIBILITY_DOC = 
       "If true, this node can participate in master election. In a multi-colo setup, turn this off" 
-      + "for clusters in the slave data center.";                               
+      + "for clusters in the slave data center.";
+  protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
+      "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
+      + "Values can be `PLAINTEXT` or `SSL`.";
+  protected static final String KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC =
+      "The location of the SSL trust store file used when `kafka.security.protocol` is configured "
+      + "to `SSL`.";
+  protected static final String KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC =
+      "The password to access the trust store configured with `kafka.ssl.truststore.location`.";
+  protected static final String KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC =
+      "The location of the SSL keystore file used when `kafka.security.protocol` is configured "
+      + "to `SSL` and Kafka requires SSL authentication.";
+  protected static final String KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC =
+      "The password to access the keystore configured with `kafka.ssl.keystore.location`.";
+  protected static final String KAFKASTORE_SSL_KEY_PASSWORD_DOC =
+      "The password of the key contained in the keystore configured with "
+      + "`kafka.ssl.keystore.location`.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
   private static final ConfigDef config;
@@ -152,7 +183,25 @@ public class SchemaRegistryConfig extends RestConfig {
                 ConfigDef.Importance.MEDIUM, MASTER_ELIGIBILITY_DOC)
         .defineOverride(METRICS_JMX_PREFIX_CONFIG, ConfigDef.Type.STRING,
                         METRICS_JMX_PREFIX_DEFAULT_OVERRIDE, ConfigDef.Importance.LOW,
-                        METRICS_JMX_PREFIX_DOC);
+                        METRICS_JMX_PREFIX_DOC)
+        .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
+                KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT, ConfigDef.Importance.HIGH,
+                KAFKASTORE_SECURITY_PROTOCOL_DOC)
+        .define(KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SSL_TRUSTSTORE_LOCATION_DOC)
+        .define(KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_DOC)
+        .define(KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SSL_KEYSTORE_LOCATION_DOC)
+        .define(KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SSL_KEYSTORE_PASSWORD_DOC)
+        .define(KAFKASTORE_SSL_KEY_PASSWORD_CONFIG, ConfigDef.Type.STRING,
+                "", ConfigDef.Importance.MEDIUM,
+                KAFKASTORE_SSL_KEY_PASSWORD_DOC);
   }
   private final AvroCompatibilityLevel compatibilityType;
 

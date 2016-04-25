@@ -15,6 +15,8 @@
  */
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -22,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -73,7 +76,13 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
                                 StoreUpdateHandler<K, V> storeUpdateHandler,
                                 Serializer<K, V> serializer,
                                 Store<K, V> localStore,
-                                K noopKey) {
+                                K noopKey,
+                                String kafkastoreSecurityProtocol,
+                                String kafkastoreSSLTruststoreLocation,
+                                String kafkastoreSSLTruststorePassword,
+                                String kafkastoreSSLKeystoreLocation,
+                                String kafkastoreSSLKeystorePassword,
+                                String kafkastoreSSLKeyPassword) {
     super("kafka-store-reader-thread-" + topic, false);  // this thread is not interruptible
     offsetUpdateLock = new ReentrantLock();
     offsetReachedThreshold = offsetUpdateLock.newCondition();
@@ -95,6 +104,18 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, kafkastoreSecurityProtocol);
+    if (kafkastoreSecurityProtocol.equals(
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      consumerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, kafkastoreSSLTruststoreLocation);
+      consumerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, kafkastoreSSLTruststorePassword);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, kafkastoreSSLKeystoreLocation,
+              consumerProps);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, kafkastoreSSLKeystorePassword,
+              consumerProps);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG, kafkastoreSSLKeyPassword,
+              consumerProps);
+    }
     this.consumer = new KafkaConsumer<>(consumerProps);
 
     List<PartitionInfo> partitions = this.consumer.partitionsFor(this.topic);
