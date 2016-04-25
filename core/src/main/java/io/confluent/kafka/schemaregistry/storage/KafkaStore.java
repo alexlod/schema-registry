@@ -25,10 +25,18 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -127,6 +135,27 @@ public class KafkaStore<K, V> implements Store<K, V> {
             config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG);
     this.kafkastoreSSLKeyPassword =
             config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG);
+
+    // TODO: need to add the other SSL config parameters.
+
+    // TODO: delete this. Debugging.
+    System.out.println("In kafka store:");
+    System.out.println(kafkastoreSSLTruststoreLocation);
+    try {
+      FileInputStream fis = new FileInputStream(new File(kafkastoreSSLTruststoreLocation));
+      String hash = org.apache.commons.codec.digest.DigestUtils.md5Hex(fis);
+      fis.close();
+      System.out.println("MD5: " + hash);
+    } catch (Exception e) {
+    }
+    System.out.println(kafkastoreSSLKeystoreLocation);
+    try {
+      FileInputStream fis = new FileInputStream(new File(kafkastoreSSLKeystoreLocation));
+      String hash = org.apache.commons.codec.digest.DigestUtils.md5Hex(fis);
+      fis.close();
+      System.out.println("MD5: " + hash);
+    } catch (Exception e) {
+    }
   }
 
   @Override
@@ -148,14 +177,14 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, this.kafkastoreSecurityProtocol);
     if (this.kafkastoreSecurityProtocol.equals(
         SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
-      props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, this.kafkastoreSecurityProtocol);
-      props.put("ssl.truststore.location", this.kafkastoreSSLTruststoreLocation);
-      props.put("ssl.truststore.password", this.kafkastoreSSLTruststorePassword);
-      props.put("ssl.keystore.location", this.kafkastoreSSLKeystoreLocation);
-      props.put("ssl.keystore.password", this.kafkastoreSSLKeystorePassword);
-      props.put("ssl.key.password", this.kafkastoreSSLKeyPassword);
+      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, this.kafkastoreSSLTruststoreLocation);
+      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.kafkastoreSSLTruststorePassword);
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, this.kafkastoreSSLKeystoreLocation, props);
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.kafkastoreSSLKeystorePassword, props);
+      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG, this.kafkastoreSSLKeyPassword, props);
     }
 
     producer = new KafkaProducer<byte[],byte[]>(props);
@@ -181,6 +210,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (!isInitialized) {
       throw new StoreInitializationException("Illegal state while initializing store. Store "
                                              + "was already initialized");
+    }
+  }
+
+  // helper method to only add a property if its not the empty string. This is required
+  // because some Kafka client configs expect a null default value, yet ConfigDef doesn't
+  // support null default values.
+  public static void putIfNotEmptyString(String parameter, String value, Properties props) {
+    if (! value.equals("")) {
+      props.put(parameter, value);
     }
   }
 

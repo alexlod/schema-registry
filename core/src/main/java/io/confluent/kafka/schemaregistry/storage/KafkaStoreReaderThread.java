@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
@@ -103,14 +104,17 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
+    consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, kafkastoreSecurityProtocol);
     if (kafkastoreSecurityProtocol.equals(
             SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
-      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, kafkastoreSecurityProtocol);
-      consumerProps.put("ssl.truststore.location", kafkastoreSSLTruststoreLocation);
-      consumerProps.put("ssl.truststore.password", kafkastoreSSLTruststorePassword);
-      consumerProps.put("ssl.keystore.location", kafkastoreSSLKeystoreLocation);
-      consumerProps.put("ssl.keystore.password", kafkastoreSSLKeystorePassword);
-      consumerProps.put("ssl.key.password", kafkastoreSSLKeyPassword);
+      consumerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, kafkastoreSSLTruststoreLocation);
+      consumerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, kafkastoreSSLTruststorePassword);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, kafkastoreSSLKeystoreLocation,
+              consumerProps);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, kafkastoreSSLKeystorePassword,
+              consumerProps);
+      KafkaStore.putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG, kafkastoreSSLKeyPassword,
+              consumerProps);
     }
     this.consumer = new KafkaConsumer<>(consumerProps);
 
