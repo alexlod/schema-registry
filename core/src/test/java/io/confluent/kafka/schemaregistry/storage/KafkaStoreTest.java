@@ -64,7 +64,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testIncorrectInitialization() {
+  public void testDoubleInitialization() {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect,
                                                                                        zkClient);
     try {
@@ -83,18 +83,23 @@ public class KafkaStoreTest extends ClusterTestHarness {
     String key = "Kafka";
     String value = "Rocks";
     try {
-      kafkaStore.put(key, value);
-    } catch (StoreException e) {
-      fail("Kafka store put(Kafka, Rocks) operation failed");
+      try {
+        kafkaStore.put(key, value);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      }
+      String retrievedValue = null;
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    String retrievedValue = null;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    kafkaStore.close();
   }
 
   // TODO: This requires fix for https://issues.apache.org/jira/browse/KAFKA-1788
@@ -137,30 +142,39 @@ public class KafkaStoreTest extends ClusterTestHarness {
                                                                                        inMemoryStore);
     String key = "Kafka";
     String value = "Rocks";
-    try {
-      kafkaStore.put(key, value);
-    } catch (StoreException e) {
-      fail("Kafka store put(Kafka, Rocks) operation failed");
-    }
     String retrievedValue = null;
     try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
+      try {
+        kafkaStore.put(key, value);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      }
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    kafkaStore.close();
 
     // recreate kafka store
     kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
-    retrievedValue = null;
     try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    kafkaStore.close();
   }
 
   @Test
@@ -170,31 +184,35 @@ public class KafkaStoreTest extends ClusterTestHarness {
     String key = "Kafka";
     String value = "Rocks";
     try {
-      kafkaStore.put(key, value);
-    } catch (StoreException e) {
-      fail("Kafka store put(Kafka, Rocks) operation failed");
+      try {
+        kafkaStore.put(key, value);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      }
+      String retrievedValue = null;
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+      try {
+        kafkaStore.delete(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store delete(Kafka) operation failed", e);
+      }
+      // verify that value is deleted
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertNull("Value should have been deleted", retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    String retrievedValue = null;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    try {
-      kafkaStore.delete(key);
-    } catch (StoreException e) {
-      fail("Kafka store delete(Kafka) operation failed");
-    }
-    // verify that value is deleted
-    retrievedValue = value;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertNull("Value should have been deleted", retrievedValue);
-    kafkaStore.close();
   }
 
   @Test
@@ -206,43 +224,47 @@ public class KafkaStoreTest extends ClusterTestHarness {
     String key = "Kafka";
     String value = "Rocks";
     try {
-      kafkaStore.put(key, value);
-    } catch (StoreException e) {
-      fail("Kafka store put(Kafka, Rocks) operation failed");
+      try {
+        kafkaStore.put(key, value);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      }
+      String retrievedValue = null;
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+      // delete the key
+      try {
+        kafkaStore.delete(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store delete(Kafka) operation failed", e);
+      }
+      // verify that key is deleted
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertNull("Value should have been deleted", retrievedValue);
+      kafkaStore.close();
+      // recreate kafka store
+      kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
+      // verify that key still doesn't exist in the store
+      retrievedValue = value;
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertNull("Value should have been deleted", retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    String retrievedValue = null;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    // delete the key
-    try {
-      kafkaStore.delete(key);
-    } catch (StoreException e) {
-      fail("Kafka store delete(Kafka) operation failed");
-    }
-    // verify that key is deleted
-    retrievedValue = value;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertNull("Value should have been deleted", retrievedValue);
-    kafkaStore.close();
-    // recreate kafka store
-    kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(zkConnect, zkClient, inMemoryStore);
-    // verify that key still doesn't exist in the store
-    retrievedValue = value;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertNull("Value should have been deleted", retrievedValue);
-    kafkaStore.close();
   }
 
   @Test

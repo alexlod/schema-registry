@@ -91,7 +91,7 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk15on</artifactId>
-            <version>1.54</version>
+            <version>${bouncycastle.bcpkix.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
