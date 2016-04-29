@@ -79,17 +79,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   // messages with this key
   private final K noopKey;
   private volatile long lastWrittenOffset = -1L;
-  private final String kafkastoreSecurityProtocol;
-  private final String kafkastoreSSLTruststoreLocation;
-  private final String kafkastoreSSLTruststorePassword;
-  private final String kafkastoreSSLKeystoreLocation;
-  private final String kafkastoreSSLKeystorePassword;
-  private final String kafkastoreSSLKeyPassword;
-  private final String kafkastoreSSLEnabledProtocols;
-  private final String kafkastoreSSLKeystoreType;
-  private final String kafkastoreSSLProtocol;
-  private final String kafkastoreSSLProvider;
-  private final String kafkastoreSSLTruststoreType;
+  private final SchemaRegistryConfig config;
 
   public KafkaStore(SchemaRegistryConfig config,
                     StoreUpdateHandler<K, V> storeUpdateHandler,
@@ -121,28 +111,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
             JavaConversions.seqAsJavaList(this.brokerSeq));
 
-    this.kafkastoreSecurityProtocol =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG);
-    this.kafkastoreSSLTruststoreLocation =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG);
-    this.kafkastoreSSLTruststorePassword =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG);
-    this.kafkastoreSSLKeystoreLocation =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG);
-    this.kafkastoreSSLKeystorePassword =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG);
-    this.kafkastoreSSLKeyPassword =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG);
-    this.kafkastoreSSLEnabledProtocols =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOL_CONFIG);
-    this.kafkastoreSSLKeystoreType =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG);
-    this.kafkastoreSSLProtocol =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG);
-    this.kafkastoreSSLProvider =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG);
-    this.kafkastoreSSLTruststoreType =
-            config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG);
+    this.config = config;
   }
 
   @Override
@@ -164,20 +133,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, this.kafkastoreSecurityProtocol);
-    if (this.kafkastoreSecurityProtocol.equals(
-        SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
-      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, this.kafkastoreSSLTruststoreLocation);
-      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, this.kafkastoreSSLTruststorePassword);
-      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, this.kafkastoreSSLKeystoreLocation, props);
-      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, this.kafkastoreSSLKeystorePassword, props);
-      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG, this.kafkastoreSSLKeyPassword, props);
-      putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, this.kafkastoreSSLEnabledProtocols, props);
-      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, this.kafkastoreSSLKeystoreType);
-      props.put(SslConfigs.SSL_PROTOCOL_CONFIG, this.kafkastoreSSLProtocol);
-      putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG, this.kafkastoreSSLProvider, props);
-      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, this.kafkastoreSSLTruststoreType);
-    }
+
+    addSslConfigsToClientProperties(this.config, props);
 
     producer = new KafkaProducer<byte[],byte[]>(props);
 
@@ -186,12 +143,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.kafkaTopicReader =
             new KafkaStoreReaderThread<>(this.bootstrapBrokers, topic, groupId,
                     this.storeUpdateHandler, serializer, this.localStore,
-                    this.noopKey, this.kafkastoreSecurityProtocol,
-                    this.kafkastoreSSLTruststoreLocation, this.kafkastoreSSLTruststorePassword,
-                    this.kafkastoreSSLKeystoreLocation, this.kafkastoreSSLKeystorePassword,
-                    this.kafkastoreSSLKeyPassword, this.kafkastoreSSLEnabledProtocols,
-                    this.kafkastoreSSLKeystoreType, this.kafkastoreSSLProtocol,
-                    this.kafkastoreSSLProvider, this.kafkastoreSSLTruststoreType);
+                    this.noopKey, this.config);
     this.kafkaTopicReader.start();
 
     try {
@@ -207,11 +159,39 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
+  public static void addSslConfigsToClientProperties(SchemaRegistryConfig config, Properties props) {
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG));
+    if (config.getString(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_CONFIG).equals(
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL)) {
+      props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOL_CONFIG), props);
+      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG), props);
+      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+    }
+  }
+
   // helper method to only add a property if its not the empty string. This is required
   // because some Kafka client configs expect a null default value, yet ConfigDef doesn't
   // support null default values.
-  public static void putIfNotEmptyString(String parameter, String value, Properties props) {
-    if (! value.equals("")) {
+  private static void putIfNotEmptyString(String parameter, String value, Properties props) {
+    if (!value.trim().isEmpty()) {
       props.put(parameter, value);
     }
   }

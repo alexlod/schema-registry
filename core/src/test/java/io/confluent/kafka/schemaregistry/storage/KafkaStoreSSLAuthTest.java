@@ -1,5 +1,5 @@
 /**
- * Copyright 2014 Confluent Inc.
+ * Copyright 2016 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.kafka.common.errors.TimeoutException;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -43,15 +45,23 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
   @Test
   public void testInitialization() {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
-            zkClient, clientSslConfigs, true);
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     kafkaStore.close();
   }
 
+  @Test(expected = TimeoutException.class)
+  public void testInitializationWithoutClientAuth() {
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
+            zkClient, clientSslConfigs, false);
+    kafkaStore.close();
+
+    // TODO: make the timeout shorter so the test fails quicker.
+  }
 
   @Test
-  public void testIncorrectInitialization() {
+  public void testDoubleInitialization() {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
-            zkClient, clientSslConfigs, true);
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     try {
       kafkaStore.init();
       fail("Kafka store repeated initialization should fail");
@@ -64,21 +74,26 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
   @Test
   public void testSimplePut() throws InterruptedException {
     KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSSLKafkaStoreInstance(zkConnect,
-            zkClient, clientSslConfigs, true);
+            zkClient, clientSslConfigs, requireSSLClientAuth());
     String key = "Kafka";
     String value = "Rocks";
     try {
-      kafkaStore.put(key, value);
-    } catch (StoreException e) {
-      fail("Kafka store put(Kafka, Rocks) operation failed");
+      try {
+        kafkaStore.put(key, value);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      }
+      String retrievedValue = null;
+      try {
+        retrievedValue = kafkaStore.get(key);
+      } catch (StoreException e) {
+        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+      }
+      assertEquals("Retrieved value should match entered value", value, retrievedValue);
+    } catch (RuntimeException re) {
+      throw new RuntimeException(re);
+    } finally {
+      kafkaStore.close();
     }
-    String retrievedValue = null;
-    try {
-      retrievedValue = kafkaStore.get(key);
-    } catch (StoreException e) {
-      fail("Kafka store get(Kafka) operation failed");
-    }
-    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    kafkaStore.close();
   }
 }

@@ -150,8 +150,9 @@ public abstract class ClusterTestHarness {
             TestUtils.RandomPort(), Option.<String>empty());
     props.setProperty("auto.create.topics.enable", "true");
     props.setProperty("num.partitions", "1");
-    // We *must* override this to use the port we allocated (Kafka currently allocates one port
-    // that it always uses for ZK
+
+    // We *must* override this to use the ZooKeeper port chosen in this test harness, instead of the
+    // port chosen by TestUtils.createBrokerConfig().
     props.setProperty("zookeeper.connect", this.zkConnect);
     return KafkaConfig.fromProps(props);
   }
