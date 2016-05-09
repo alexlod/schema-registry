@@ -95,8 +95,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }
@@ -155,8 +153,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }
@@ -170,8 +166,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }
@@ -208,8 +202,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertNull("Value should have been deleted", retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }
@@ -260,8 +252,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertNull("Value should have been deleted", retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }

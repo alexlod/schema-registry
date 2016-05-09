@@ -90,8 +90,6 @@ public class KafkaStoreSSLAuthTest extends SSLClusterTestHarness {
         throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
       }
       assertEquals("Retrieved value should match entered value", value, retrievedValue);
-    } catch (RuntimeException re) {
-      throw new RuntimeException(re);
     } finally {
       kafkaStore.close();
     }

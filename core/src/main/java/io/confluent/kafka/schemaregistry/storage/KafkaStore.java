@@ -168,22 +168,30 @@ public class KafkaStore<K, V> implements Store<K, V> {
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_LOCATION_CONFIG));
       props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_PASSWORD_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTMANAGER_ALGORITHM_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_LOCATION_CONFIG), props);
       putIfNotEmptyString(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_PASSWORD_CONFIG), props);
+      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+      props.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYMANAGER_ALGORITHM_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_KEY_PASSWORD_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEY_PASSWORD_CONFIG), props);
       putIfNotEmptyString(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOL_CONFIG), props);
-      props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_KEYSTORE_TYPE_CONFIG));
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENABLED_PROTOCOLS_CONFIG), props);
       props.put(SslConfigs.SSL_PROTOCOL_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROTOCOL_CONFIG));
       putIfNotEmptyString(SslConfigs.SSL_PROVIDER_CONFIG,
               config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_PROVIDER_CONFIG), props);
-      props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_TRUSTSTORE_TYPE_CONFIG));
+      putIfNotEmptyString(SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_CIPHER_SUITES_CONFIG), props);
+      putIfNotEmptyString(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+              config.getString(SchemaRegistryConfig.KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG), props);
     }
   }
 
