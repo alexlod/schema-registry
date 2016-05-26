@@ -12,3 +12,12 @@ The Schema Registry uses Kafka to persist schemas. The following Kafka security 
 
 * SSL encryption
 * SSL authentication
+
+ZooKeeper
+~~~~~~~~~~~
+
+TODO: Write tests (oy)
+
+TODO: Document that the SASL credentials must be the same as the broker if ZK ACLs are set. An alternative is to turn off ACLs for both kafka and schema registry and use different principals.
+
+TODO: Document the other SASL config requirements -- the java properties, the jaas file, and the zookeeper acl option.
