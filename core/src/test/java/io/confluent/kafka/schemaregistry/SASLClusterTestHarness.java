@@ -38,10 +38,11 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Properties;
-import java.util.Scanner;
 
 public class SASLClusterTestHarness extends ClusterTestHarness {
   public static final String JAAS_CONF = "java.security.auth.login.config";
+  public static final String KRB5_CONF = "java.security.krb5.conf";
+  public static final String ZK_AUTH_PROVIDER = "zookeeper.authProvider.1";
 
   private static MiniKdc kdc;
   private static File kdcHome;
@@ -61,8 +62,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
 
   @BeforeClass
   public static void setUpKdc() throws Exception {
-    LoginManager.closeAll();
-
+    destroySaslHelper();
     File zkServerKeytab = File.createTempFile("zookeeper-", ".keytab");
     File kafkaKeytab = File.createTempFile("kafka-", ".keytab");
     File schemaRegistryKeytab = File.createTempFile("schema-registry-", ".keytab");
@@ -88,17 +88,6 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     out.close();
 
     Configuration.setConfiguration(null);
-    System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
-
-    // TODO: delete this. And delete the Scanner import
-    Scanner s = new Scanner(jaasFile);
-    System.out.println("********************");
-    System.out.println("Printing Jaas file:");
-    System.out.println("********************");
-    while (s.hasNextLine()) {
-      System.out.println("\t" + s.nextLine());
-    }
-    s.close();
 
     Properties kdcProps = MiniKdc.createConfig();
     kdcHome = Files.createTempDirectory("mini-kdc").toFile();
@@ -108,22 +97,12 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
 
     krb5ConfPath = System.getProperty("java.security.krb5.conf");
 
-    // TODO: issue is when ZK Client tries to connect for the first time. This is before Kafka starts.
-
-    System.out.println("********************");
-    System.out.println("java.security.krb5.conf = " + System.getProperty("java.security.krb5.conf"));
-    System.out.println("********************");
-
     createPrincipal(zkServerKeytab, "zookeeper/localhost");
     createPrincipal(kafkaKeytab, "kafka/localhost");
     createPrincipal(schemaRegistryKeytab, "schema-registry/localhost");
 
-    // don't need to set java.security.krb5.conf because the MiniKdc does it.
-
-    // TODO: delete me
-    System.setProperty("sun.security.krb5.debug", "true");
-
-    System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
+    // destroy SASL settings so all tests don't have SASL enabled. SASL is re-enabled in a @Before method below.
+    destroySaslHelper();
   }
 
   @Before
@@ -131,15 +110,9 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   public void setUp() throws Exception {
     LoginManager.closeAll();
     Configuration.setConfiguration(null);
-
     System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
-
-    System.setProperty("java.security.krb5.conf", krb5ConfPath); // TODO: make this config parameter a constant
-
-    System.setProperty("sun.security.krb5.debug", "true");
-
-    System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
-
+    System.setProperty(KRB5_CONF, krb5ConfPath);
+    System.setProperty(ZK_AUTH_PROVIDER, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
     super.setUp();
   }
 
@@ -185,11 +158,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   @After
   @Override
   public void tearDown() throws Exception {
-    LoginManager.closeAll();
-    System.clearProperty(JAAS_CONF);
-    System.clearProperty("zookeeper.authProvider.1");
-    System.clearProperty("java.security.krb5.conf"); // TODO: constant
-    Configuration.setConfiguration(null);
+    destroySaslHelper();
     super.tearDown();
   }
 
@@ -201,9 +170,14 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     if (kdcHome != null && !kdcHome.delete()) {
       log.warn("Could not delete the KDC directory.");
     }
+    destroySaslHelper();
+  }
+
+  private static void destroySaslHelper() {
     LoginManager.closeAll();
     System.clearProperty(JAAS_CONF);
-    System.clearProperty("zookeeper.authProvider.1");
+    System.clearProperty(ZK_AUTH_PROVIDER);
+    System.clearProperty(KRB5_CONF);
     Configuration.setConfiguration(null);
   }
 }
