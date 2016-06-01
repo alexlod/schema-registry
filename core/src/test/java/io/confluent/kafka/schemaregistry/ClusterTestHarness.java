@@ -49,7 +49,7 @@ public abstract class ClusterTestHarness {
 
   public static final int DEFAULT_NUM_BROKERS = 1;
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
-  protected static final Option<Properties> SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
+  protected static final Option<Properties> EMPTY_SASL_PROPERTIES = Option$.MODULE$.<Properties>empty();
 
   /**
    * Choose a number of random available ports
@@ -86,7 +86,7 @@ public abstract class ClusterTestHarness {
   protected String zkConnect;
   protected ZkClient zkClient;
   protected ZkUtils zkUtils;
-  protected int zkConnectionTimeout = 30000;
+  protected int zkConnectionTimeout = 60000;
   protected int zkSessionTimeout = 6000;
 
   // Kafka Config
@@ -122,7 +122,7 @@ public abstract class ClusterTestHarness {
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
         false); // true of false doesn't matter because schema registry principal is the same as the
                 // kafka principal, so ACLs won't make any difference. Read comments in
-                // ZkSASLClusterTestHarness.java for more details.
+                // SASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 
     configs = new Vector<>();
@@ -155,7 +155,7 @@ public abstract class ClusterTestHarness {
     final Option<SecurityProtocol> noInterBrokerSecurityProtocol = scala.Option.apply(null);
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), noInterBrokerSecurityProtocol,
-            noFile, SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
+            noFile, EMPTY_SASL_PROPERTIES, true, false, TestUtils.RandomPort(), false, TestUtils.RandomPort(), false,
             TestUtils.RandomPort(), Option.<String>empty());
     injectProperties(props);
     return KafkaConfig.fromProps(props);

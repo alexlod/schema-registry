@@ -17,18 +17,21 @@
 package io.confluent.kafka.schemaregistry.zookeeper;
 
 import io.confluent.kafka.schemaregistry.RestApp;
-import io.confluent.kafka.schemaregistry.ZkSASLClusterTestHarness;
+import io.confluent.kafka.schemaregistry.SASLClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.KafkaStore;
 import io.confluent.kafka.schemaregistry.storage.StoreUtils;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class TestZooKeeperSASL extends ZkSASLClusterTestHarness {
+public class TestZooKeeperSASL extends SASLClusterTestHarness {
+  @Override
+  protected boolean enableKafkaPlaintextEndpoint() { return true; }
+
   @Test
   public void testKafkaStoreInitialization() {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitZKSASLKafkaStoreInstance(zkConnect,
-            zkClient, false);
+    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitSASLStoreInstance(zkConnect,
+            zkClient);
     kafkaStore.close();
   }
 
@@ -44,9 +47,9 @@ public class TestZooKeeperSASL extends ZkSASLClusterTestHarness {
     restApp.stop();
   }
 
-  // IMPORTANT: ideally we could write tests that test SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG. However,
+  // NOTE: ideally we could write tests that test SchemaRegistryConfig.ZOOKEEPER_SET_ACL_CONFIG. However,
   // this is impossible because the client ZooKeeper Jaas section is the same for the embedded Kafka cluster
   // and the schema registry. Meaning, the schema registry and kafka use the same principal. As such, a scenario
-  // where the schema registry does not have the right authorization is impossible. See `ZkSASLClusterTestHarness.java`
+  // where the schema registry does not have the right authorization is impossible. See `SASLClusterTestHarness.java`
   // for an explanation for why kafka and the schema registry share the same principal.
 }
