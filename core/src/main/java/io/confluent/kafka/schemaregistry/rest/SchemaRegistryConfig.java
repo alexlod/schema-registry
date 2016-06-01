@@ -195,8 +195,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC =
       "The endpoint identification algorithm to validate the server hostname using the server certificate.";
   public static final String KAFKASTORE_SASL_KERBEROS_SERVICE_NAME_DOC =
-      "The Kerberos principal name that the Kafka client runs as. This can be defined either in Kafka's JAAS "
-      + "config or here.";
+      "The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS "
+      + "config file or here.";
   public static final String KAFKASTORE_SASL_MECHANISM_DOC =
       "The SASL mechanism used for Kafka connections. GSSAPI is the default.";
   public static final String KAFKASTORE_SASL_KERBEROS_KINIT_CMD_DOC =

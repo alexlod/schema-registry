@@ -200,6 +200,20 @@ Configuration Options
   * Default: true
   * Importance: medium
 
+``kafkastore.sasl.kerberos.service.name``
+  The Kerberos principal name that the Kafka client runs as. This can be defined either in the JAAS config file or here.
+
+  * Type: string
+  * Default: ""
+  * Importance: medium
+
+``kafkastore.sasl.mechanism``
+  The SASL mechanism used for Kafka connections. GSSAPI is the default.
+
+  * Type: string
+  * Default: "GSSAPI"
+  * Importance: medium
+
 ``access.control.allow.methods``
   Set value to Jetty Access-Control-Allow-Origin header for specified methods
 
@@ -380,4 +394,32 @@ Configuration Options
 
   * Type: string
   * Default: "" (Jetty's default)
+  * Importance: low
+
+``kafkastore.sasl.kerberos.kinit.cmd``
+  The Kerberos kinit command path.
+
+  * Type: string
+  * Default: "/usr/bin/kinit"
+  * Importance: low
+
+``kafkastore.sasl.kerberos.min.time.before.relogin``
+  The login time between refresh attempts.
+
+  * Type: long
+  * Default: 60000
+  * Importance: low
+
+``kafkastore.sasl.kerberos.ticket.renew.jitter``
+  The percentage of random jitter added to the renewal time.
+
+  * Type: double
+  * Default: 0.05
+  * Importance: low
+
+``kafkastore.sasl.kerberos.ticket.renew.window.factor``
+  Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has been reached, at which time it will try to renew the ticket.
+
+  * Type: double
+  * Default: 0.8
   * Importance: low
