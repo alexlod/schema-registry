@@ -39,6 +39,7 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Properties;
 
+// sets up SASL for ZooKeeper and Kafka.
 public class SASLClusterTestHarness extends ClusterTestHarness {
   public static final String JAAS_CONF = "java.security.auth.login.config";
   public static final String KRB5_CONF = "java.security.krb5.conf";
@@ -131,8 +132,6 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return new JaasTestUtils.JaasSection(jaasContextName, jaasModules);
   }
 
-  protected boolean enableKafkaPlaintextEndpoint() { return false; }
-
   @Override
   protected KafkaConfig getKafkaConfig(int brokerId) {
     final Option<File> trustStoreFileOption = scala.Option.apply(null);
@@ -140,7 +139,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
             scala.Option.apply(SecurityProtocol.SASL_PLAINTEXT);
     Properties props = TestUtils.createBrokerConfig(
             brokerId, zkConnect, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
-            trustStoreFileOption, EMPTY_SASL_PROPERTIES, enableKafkaPlaintextEndpoint(), true, TestUtils.RandomPort(),
+            trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, true, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(), Option.<String>empty());
 
