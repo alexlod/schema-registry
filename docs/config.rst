@@ -1,7 +1,5 @@
 .. _schemaregistry_config:
 
-// TODO: ADD SASL DOCS
-
 Configuration Options
 =====================
 ``kafkastore.connection.url``
