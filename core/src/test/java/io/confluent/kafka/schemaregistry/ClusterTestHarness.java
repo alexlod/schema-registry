@@ -120,8 +120,8 @@ public abstract class ClusterTestHarness {
     zkConnect = String.format("localhost:%d", zookeeper.port());
     zkUtils = ZkUtils.apply(
         zkConnect, zkSessionTimeout, zkConnectionTimeout,
-        false); // true of false doesn't matter because schema registry principal is the same as the
-                // kafka principal, so ACLs won't make any difference. Read comments in
+        false); // true of false doesn't matter because the schema registry Kafka principal is the same as the
+                // Kafka broker principal, so ACLs won't make any difference. Read comments in
                 // SASLClusterTestHarness.java for more details.
     zkClient = zkUtils.zkClient();
 

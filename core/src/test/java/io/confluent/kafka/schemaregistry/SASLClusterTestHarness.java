@@ -22,15 +22,15 @@ import kafka.utils.JaasTestUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
 import scala.collection.Seq;
 
+import javax.security.auth.login.Configuration;
 import java.io.File;
 import java.io.PrintWriter;
 import java.nio.file.Files;
@@ -41,9 +41,8 @@ import java.util.Scanner;
 public class SASLClusterTestHarness extends ClusterTestHarness {
   public static final String JAAS_CONF = "java.security.auth.login.config";
 
-  private static MiniKdc kdc;
-  private static File kdcHome;
-  private static File jaasFile;
+  private MiniKdc kdc;
+  private File kdcHome;
 
   private static final Logger log = LoggerFactory.getLogger(SASLClusterTestHarness.class);
 
@@ -56,8 +55,14 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
-  @BeforeClass
-  public static void setUpKdc() throws Exception {
+  @Before
+  @Override
+  public void setUp() throws Exception {
+    Configuration.setConfiguration(null);
+
+    // TODO: clear kerberos cache?
+    LoginManager.closeAll();
+
     Properties kdcProps = MiniKdc.createConfig();
     kdcHome = Files.createTempDirectory("mini-kdc").toFile();
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
@@ -65,10 +70,8 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     kdc.start();
 
     // create Kerberos principals.
-    File zkServerKeytab = createPrincipal("zookeeper-", "zookeeper/localhost");
-    File kafkaKeytab = createPrincipal("kafka-", "kafka/localhost");
-    File schemaRegistryKeytab = createPrincipal("schema-registry-",
-            "schema-registry/localhost");
+    File zkServerKeytab = createPrincipalAndKeytab("zookeeper-", "zookeeper/localhost");
+    File kafkaKeytab = createPrincipalAndKeytab("kafka-", "kafka/localhost");
 
     // build and write the JAAS file.
     JaasTestUtils.JaasSection serverSection = createJaasSection(zkServerKeytab,
@@ -77,30 +80,25 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
             "kafka/localhost@EXAMPLE.COM", "Client", "zookeeper");
     JaasTestUtils.JaasSection kafkaServerSection = createJaasSection(kafkaKeytab,
             "kafka/localhost@EXAMPLE.COM", "KafkaServer", "kafka");
-    JaasTestUtils.JaasSection kafkaClientSection = createJaasSection(schemaRegistryKeytab,
-            "schema-registry/localhost@EXAMPLE.COM", "KafkaClient", "kafka");
+    JaasTestUtils.JaasSection kafkaClientSection = createJaasSection(kafkaKeytab,
+            "kafka/localhost@EXAMPLE.COM", "KafkaClient", "kafka");
     // NOTE: there is only one `Client` section in the Jaas configuraiton file. Both the internal embedded Kafka
     // cluster and the schema registry share the same principal. This is required because within the same JVM (eg
     // these tests) one cannot have two sections, each with its own ZooKeeper client SASL credentials.
-    jaasFile = File.createTempFile("schema_registry_tests", "_jaas.conf");
+    File jaasFile = File.createTempFile("schema_registry_tests", "_jaas.conf");
     PrintWriter out = new PrintWriter(jaasFile);
     out.println(serverSection.toString());
     out.println(clientSection.toString());
     out.println(kafkaServerSection.toString());
     out.println(kafkaClientSection.toString());
     out.close();
-  }
 
-  @Before
-  @Override
-  public void setUp() throws Exception {
-    // TODO: remove storing of value
-    String orig = System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
-    System.out.println("Original value for " + JAAS_CONF + ": " + orig);
+    System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
 
     // TODO: delete this. And delete the Scanner import
     Scanner s = new Scanner(jaasFile);
     System.out.println("********************");
+    System.out.println("java.security.krb5.conf = " + System.getProperty("java.security.krb5.conf"));
     System.out.println("Printing Jaas file:");
     System.out.println("********************");
     while (s.hasNextLine()) {
@@ -113,19 +111,9 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     // TODO: delete me
     System.setProperty("sun.security.krb5.debug", "true");
 
-    // we *must* set a SASL provider. Frankly, it's unclear why. Perhaps because the ZooKeeper and Kafka test
-    // utils don't set this properly? Kafka's tests manually set this, too.
     System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
 
     super.setUp();
-  }
-
-  @After
-  @Override
-  public void tearDown() throws Exception {
-    System.clearProperty(JAAS_CONF);
-    System.clearProperty("zookeeper.authProvider.1");
-    super.tearDown();
   }
 
   protected boolean enableKafkaPlaintextEndpoint() { return false; }
@@ -149,7 +137,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return KafkaConfig.fromProps(props);
   }
 
-  private static File createPrincipal(String pathPrefix, String principalNoRealm) throws Exception {
+  private File createPrincipalAndKeytab(String pathPrefix, String principalNoRealm) throws Exception {
     File keytab = File.createTempFile(pathPrefix, ".keytab");
     Seq<String> principals = scala.collection.JavaConversions.asScalaBuffer(
             Arrays.asList(principalNoRealm)
@@ -158,7 +146,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return keytab;
   }
 
-  private static JaasTestUtils.JaasSection createJaasSection(File keytab, String principalWithRealm,
+  private JaasTestUtils.JaasSection createJaasSection(File keytab, String principalWithRealm,
                                                              String jaasContextName, String serviceName) {
     final scala.Option<String> serviceNameOption = scala.Option.apply(serviceName);
     JaasTestUtils.Krb5LoginModule krbModule = new JaasTestUtils.Krb5LoginModule(true, true,
@@ -169,11 +157,14 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     return new JaasTestUtils.JaasSection(jaasContextName, jaasModules);
   }
 
-  @AfterClass
-  public static void tearDownKdc() throws Exception {
+  @After
+  @Override
+  public void tearDown() throws Exception {
     kdc.stop();
     if (!kdcHome.delete()) {
       log.warn("Could not delete the KDC directory.");
     }
+    Configuration.setConfiguration(null);
+    super.tearDown();
   }
 }
