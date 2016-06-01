@@ -87,8 +87,6 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     out.println(kafkaClientSection.toString());
     out.close();
 
-    Configuration.setConfiguration(null);
-
     Properties kdcProps = MiniKdc.createConfig();
     kdcHome = Files.createTempDirectory("mini-kdc").toFile();
     log.info("Using KDC home: " + kdcHome.getAbsolutePath());
@@ -108,8 +106,7 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   @Before
   @Override
   public void setUp() throws Exception {
-    LoginManager.closeAll();
-    Configuration.setConfiguration(null);
+    destroySaslHelper();
     System.setProperty(JAAS_CONF, jaasFile.getAbsolutePath());
     System.setProperty(KRB5_CONF, krb5ConfPath);
     System.setProperty(ZK_AUTH_PROVIDER, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");

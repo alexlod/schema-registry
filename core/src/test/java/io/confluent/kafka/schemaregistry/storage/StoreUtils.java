@@ -24,8 +24,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.rest.RestConfigException;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.protocol.SecurityProtocol;

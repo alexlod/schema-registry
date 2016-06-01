@@ -23,6 +23,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+// tests SASL with ZooKeeper and Kafka.
 public class KafkaStoreSASLTest extends SASLClusterTestHarness {
   @Test
   public void testInitialization() {

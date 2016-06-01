@@ -30,3 +30,5 @@ Registry will fail to create the `_schemas` topic, which will cause a leader not
 
 If the Schema Registry has a different service name than Kafka, at this time `zookeeper.set.acl` must be set to `false`
 in both the Schema Registry and Kafka.
+
+// TODO: update this, too, with Kafka SASL.
