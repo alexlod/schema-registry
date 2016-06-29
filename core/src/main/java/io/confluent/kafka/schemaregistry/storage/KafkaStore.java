@@ -272,7 +272,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
           }
           sb.append(connectionString);
         } else {
-          log.warn("Ignoring non-plaintext and non-SSL Kafka endpoint: " + connectionString);
+          log.warn("Ignoring unsupported Kafka endpoint: " + connectionString);
         }
       }
     }
