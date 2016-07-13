@@ -28,13 +28,13 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -112,8 +112,15 @@ public class KafkaStore<K, V> implements Store<K, V> {
         KafkaSchemaRegistry.checkZkAclConfig(this.config));
     this.brokerSeq = zkUtils.getAllBrokersInCluster();
 
-    this.bootstrapBrokers = KafkaStore.getBrokerEndpoints(
-            JavaConversions.seqAsJavaList(this.brokerSeq));
+    List<String> bootstrapServersConfig = config.getList(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG);
+    List<String> endpoints;
+    if (bootstrapServersConfig.isEmpty()) {
+      endpoints = brokersToEndpoints(JavaConversions.seqAsJavaList(this.brokerSeq));
+    } else {
+      endpoints = bootstrapServersConfig;
+    }
+    this.bootstrapBrokers = filterBrokerEndpoints(endpoints);
+    log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
   }
 
   @Override
@@ -260,24 +267,30 @@ public class KafkaStore<K, V> implements Store<K, V> {
     }
   }
 
-  static String getBrokerEndpoints(List<Broker> brokerList) {
-     StringBuilder sb = new StringBuilder();
+  static List<String> brokersToEndpoints(List<Broker> brokers) {
+    List<String> endpoints = new LinkedList<String>();
+    for (Broker broker : brokers) {
+      for (EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
+        endpoints.add(ep.connectionString());
+      }
+    }
+    return endpoints;
+  }
 
-    for (Broker broker : brokerList) {
-      for(EndPoint ep : JavaConversions.asJavaCollection(broker.endPoints().values())) {
-        String connectionString = ep.connectionString();
+  static String filterBrokerEndpoints(List<String> endpoints) {
+    StringBuilder sb = new StringBuilder();
 
-        if (connectionString.startsWith(SecurityProtocol.PLAINTEXT.toString() + "://")
-            || connectionString.startsWith(SecurityProtocol.SSL.toString() + "://")
-            || connectionString.startsWith(SecurityProtocol.SASL_PLAINTEXT.toString() + "://")
-            || connectionString.startsWith(SecurityProtocol.SASL_SSL.toString() + "://")) {
-          if (sb.length() > 0) {
-            sb.append(",");
-          }
-          sb.append(connectionString);
-        } else {
-          log.warn("Ignoring unsupported Kafka endpoint: " + connectionString);
+    for (String endpoint : endpoints) {
+      if (endpoint.startsWith(SecurityProtocol.PLAINTEXT.toString() + "://")
+              || endpoint.startsWith(SecurityProtocol.SSL.toString() + "://")
+              || endpoint.startsWith(SecurityProtocol.SASL_PLAINTEXT.toString() + "://")
+              || endpoint.startsWith(SecurityProtocol.SASL_SSL.toString() + "://")) {
+        if (sb.length() > 0) {
+          sb.append(",");
         }
+        sb.append(endpoint);
+      } else {
+        log.warn("Ignoring unsupported Kafka endpoint: " + endpoint);
       }
     }
 
@@ -286,11 +299,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               "none are configured.");
     }
 
-    String brokerEndpoints = sb.toString();
-
-    log.info("Initializing KafkaStore with broker endpoints: " + brokerEndpoints);
-
-    return brokerEndpoints;
+    return sb.toString();
   }
 
   private void verifySchemaTopic() {
