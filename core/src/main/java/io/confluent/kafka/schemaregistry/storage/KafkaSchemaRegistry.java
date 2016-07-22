@@ -49,10 +49,10 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutExceptio
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.zookeeper.SchemaRegistryIdentity;
 import io.confluent.kafka.schemaregistry.zookeeper.ZookeeperMasterElector;
+import io.confluent.rest.Application;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import kafka.utils.ZkUtils;
-import org.apache.kafka.common.config.ConfigException;
 import scala.Tuple2;
 
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
@@ -65,7 +65,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -165,28 +165,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry {
 
   /**
    * A Schema Registry instance's identity is in part the port it listens on. Currently the
-   * port can either be configured via the deprecated port configuration, or via the listeners
+   * port can either be configured via the deprecated `port` configuration, or via the `listeners`
    * configuration.
    *
-   * This method checks if listeners is configured, and if it is, uses the port from the first listener.
-   * If listeners isn't configured, the deprecated port configuration is used.
+   * This method uses `Application.parseListeners()` from `rest-utils` to get a list of listeners, and
+   * returns the port of the first listener to be used for the instance's identity.
    *
    * In theory, any port from any listener would be sufficient. Choosing the first, instead of say the last,
    * is arbitrary.
    */
-  public static int getPortForIdentity(int port, List<String> listeners) {
-    // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-    if (listeners.isEmpty()) {
-      return port;
-    } else {
-      URI uri;
-      try {
-        uri = new URI(listeners.get(0));
-      } catch (URISyntaxException use) {
-        throw new ConfigException("First listener could not be parsed into a URI: " + listeners.get(0));
-      }
-      return uri.getPort();
-    }
+  // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
+  static int getPortForIdentity(int port, List<String> configuredListeners) {
+    List<URI> listeners = Application.parseListeners(configuredListeners, port,
+            Arrays.asList(SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_SSL,
+                    SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT),
+            SchemaRegistryConfig.KAFKASTORE_SECURITY_PROTOCOL_PLAINTEXT);
+    return listeners.get(0).getPort();
   }
 
   @Override
